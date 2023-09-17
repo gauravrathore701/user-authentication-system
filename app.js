@@ -86,14 +86,24 @@ app.get('/signup', (req,res) => {
 })
 
 // Posting new user Signup Page Backend
-app.post('/signup', (req, res) => {
+app.post('/signup', async (req, res) => {
+    const user = req.body.Username;
+    const mail = req.body.Email;
     const newUser = new User({
-        username: req.body.Username,
-        email: req.body.Email,
+        username: user,
+        email: mail,
         password: req.body.Password
     });
-    newUser.save();
-    res.render('afterSignUp')
+    const checkuser = await collection.findOne({username: user});
+    const checkmail = await collection.findOne({email: mail});
+    if(checkuser==null){
+      if(checkmail==null){
+        newUser.save();
+        res.render('afterSignUp')
+      }
+    }else{
+      res.send('Credentials already exist')
+    }
 })
 
 // Forgot Password Page Render
@@ -102,22 +112,33 @@ app.get('/forgotpass', (req, res) => {
 })
 
 // Forgot Password Backend Setup
-app.post('/forgotpass', (req, res) => {
+app.post('/forgotpass', async (req, res) => {
     mail = req.body.Email;
-    var mailOptions = {
-        from: 'noreply@curiouslydeveloping.in',
-        to: mail,
-        subject: 'Sending Email using Node.js',
-        text: 'That was easy!'
-      };
-      
-      transporter.sendMail(mailOptions, function(error, info){
-        if (error) {
-          console.log(error);
-        } else {
-          console.log('Email sent: ' + info.response);
-        }
-      });
+    try {
+      const check = await collection.findOne({email: mail})
+      if(check!=null){
+        var mailOptions = {
+          from: 'noreply@curiouslydeveloping.in',
+          to: mail,
+          subject: 'Sending Email using Node.js',
+          text: 'That was easy!'
+        };
+        
+        transporter.sendMail(mailOptions, function(error, info){
+          if (error) {
+            console.log(error);
+          } else {
+            console.log('Email sent: ' + info.response);
+          }
+        });
+        res.send('password change link')
+      }else{
+        res.send('Credentials not found!!!')
+      }
+    }
+    catch{
+      res.send(err)
+    }
 })
 
 // Starting Server, Listening to Port 
