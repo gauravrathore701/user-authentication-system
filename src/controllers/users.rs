@@ -45,10 +45,13 @@ pub async fn register(
     }
 
     match state.database_service.users.insert_one(doc).await {
-        Ok(result) => (
-            StatusCode::CREATED,
-            Json(json!({"message": "user created", "id": result.inserted_id.to_string()})),
-        ),
+        Ok(result) => {
+            let id = match result.inserted_id {
+                Bson::ObjectId(oid) => oid.to_hex(),
+                other => other.to_string(),
+            };
+            (StatusCode::CREATED, Json(json!({"message": "user created", "id": id})))
+        },
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "failed to save user"}))),
     }
 }
