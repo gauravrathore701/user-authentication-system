@@ -83,7 +83,7 @@ user-authentication-system/
 ## Environment Variables
 
 ```env
-PORT=4179
+PORT=4183
 MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/
 JWT_SECRET=<long_random_string>
 ```
@@ -104,15 +104,13 @@ JWT_SECRET=<long_random_string>
 ./target/release/user_auth_api
 ```
 
-Server binds `0.0.0.0:4179` by default.
+Server binds `0.0.0.0:4183` by default (4179 belongs to the shows-app video server — do not reuse).
 
 ---
 
 ## Deployment on Pi
 
-Not deployed yet. To add:
-1. Copy `.env.example` → `.env`, fill in `MONGODB_URI` and `JWT_SECRET`
-2. `cargo build --release`
-3. Create systemd service running `./target/release/user_auth_api`
-4. Add tunnel ingress in `~/.cloudflared/config.yml`
-5. Add DNS CNAME for subdomain
+Deployed as systemd service `user-auth-api.service` (runs the release binary, loads
+`.env` via `EnvironmentFile`, `PORT=4183`). Consumed by `mecca-api-project`
+(api-nexus, port 4181) through its `AUTH_API_URL` env var. No tunnel ingress —
+internal only.
