@@ -3,6 +3,7 @@ use mongodb::{bson::Document, Client, Collection};
 #[derive(Clone)]
 pub struct DatabaseService {
     pub users: Collection<Document>,
+    pub watch_progress: Collection<Document>,
 }
 
 impl DatabaseService {
@@ -12,6 +13,7 @@ impl DatabaseService {
         let db = client.database("user_auth");
         DatabaseService {
             users: db.collection("users"),
+            watch_progress: db.collection("watch_progress"),
         }
     }
 }
