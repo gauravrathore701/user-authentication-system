@@ -2140,6 +2140,7 @@ dependencies = [
  "axum",
  "bcrypt",
  "dotenv",
+ "futures-util",
  "jsonwebtoken",
  "mongodb",
  "serde",

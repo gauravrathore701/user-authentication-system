@@ -28,6 +28,7 @@ async fn main() {
     let app = Router::new()
         .route("/users/register", post(controllers::users::register))
         .route("/users/login", post(controllers::users::login))
+        .route("/progress", post(controllers::progress::save).get(controllers::progress::list))
         .layer(cors)
         .with_state(state);
 

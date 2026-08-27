@@ -14,7 +14,7 @@ Previously this was a Node.js/EJS learning project (files still present: `app.js
 |-------|------|
 | Runtime | Rust (edition 2024, stable) |
 | Framework | axum 0.7 |
-| Database | MongoDB via `mongodb` 3.7 crate (`user_auth` DB, `users` collection) |
+| Database | MongoDB via `mongodb` 3.7 crate (`user_auth` DB — `users`, `watch_progress`) |
 | Password Hashing | `bcrypt` (cost 12) |
 | Auth Tokens | `jsonwebtoken` 9 — HS256, 24h expiry |
 | CORS | `tower-http` 0.6 — open (`*`) |
@@ -33,11 +33,12 @@ user-authentication-system/
 │   ├── main.rs             # AppState, router, port bind
 │   ├── controllers/
 │   │   ├── mod.rs
-│   │   └── users.rs        # register + login handlers
+│   │   │   ├── users.rs        # register + login handlers
+│   │   └── progress.rs     # watch-progress save + list (JWT-guarded)
 │   └── services/
 │       ├── mod.rs
 │       ├── database_service.rs  # MongoDB Collection<Document> wrapper
-│       └── auth_service.rs     # JWT creation
+│       └── auth_service.rs     # JWT creation + verification
 ├── .claude/history/        # changeset logs
 ├── app.js                  # old Node.js (reference only)
 ├── views/                  # old EJS templates (reference only)
@@ -47,6 +48,39 @@ user-authentication-system/
 ---
 
 ## API Endpoints
+
+### `POST /progress`  *(requires `Authorization: Bearer <jwt>`)*
+
+Upserts the caller's position in one episode, keyed on
+(username, show, path). Stored in `user_auth.watch_progress`.
+
+```json
+{
+  "show": "GOT/Season 03",
+  "path": "S03E02.mkv",
+  "position": 420.5,
+  "duration": 3000
+}
+```
+
+`show` is the watch key — the bare show name for flat shows, `show/season`
+for seasonal ones. `finished` is optional; when omitted it is derived from
+`position / duration >= 0.9`.
+
+### `GET /progress`  *(requires bearer token)*
+
+Newest episode per show — one row each, for a "continue watching" list.
+
+### `GET /progress?show=X`  *(requires bearer token)*
+
+Every episode watched in show X, newest first.
+
+All three return 401 on a missing, malformed, or expired token.
+
+Indexes on `watch_progress`: unique (username, show, path), plus
+(username, updatedAt desc).
+
+---
 
 ### `POST /users/register`
 
