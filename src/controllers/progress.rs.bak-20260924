@@ -1,8 +1,8 @@
 use axum::{
     extract::{Query, State},
-    http::{HeaderMap, StatusCode},
+    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
     response::IntoResponse,
-    Extension, Json,
+    Json,
 };
 use futures_util::TryStreamExt;
 use mongodb::bson::{doc, Document};
@@ -10,8 +10,6 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 
-use crate::controllers::users::token_from;
-use crate::middlewares::client::ClientId;
 use crate::AppState;
 
 // An episode counts as finished once the playhead passes this share of runtime.
@@ -22,32 +20,31 @@ pub struct ShowQuery {
     pub show: Option<String>,
 }
 
+fn bearer(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(AUTHORIZATION)?
+        .to_str()
+        .ok()?
+        .strip_prefix("Bearer ")
+        .map(str::to_string)
+}
+
 /// Resolves the caller's username from a verified JWT, or the error to return.
-///
-/// The token must also have been issued for `client`, so a files_project login
-/// cannot read or write a shows_project watch history.
-fn caller(
-    state: &AppState,
-    headers: &HeaderMap,
-    client: &str,
-) -> Result<String, (StatusCode, Json<Value>)> {
-    let token = token_from(headers).ok_or((
+fn caller(state: &AppState, headers: &HeaderMap) -> Result<String, (StatusCode, Json<Value>)> {
+    let token = bearer(headers).ok_or((
         StatusCode::UNAUTHORIZED,
         Json(json!({"error": "missing bearer token"})),
     ))?;
-    let claims = state.auth_service.verify_token(&token).map_err(|_| {
-        (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "invalid or expired token"})),
-        )
-    })?;
-    if claims.client != client {
-        return Err((
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "token issued for another client"})),
-        ));
-    }
-    Ok(claims.sub)
+    state
+        .auth_service
+        .verify_token(&token)
+        .map(|claims| claims.sub)
+        .map_err(|_| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"error": "invalid or expired token"})),
+            )
+        })
 }
 
 fn to_json(doc: &Document) -> Value {
@@ -71,11 +68,10 @@ fn now_ms() -> i64 {
 /// POST /progress — upsert one episode's playback position for the caller.
 pub async fn save(
     State(state): State<AppState>,
-    Extension(ClientId(client)): Extension<ClientId>,
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> impl IntoResponse {
-    let username = match caller(&state, &headers, &client) {
+    let username = match caller(&state, &headers) {
         Ok(u) => u,
         Err(e) => return e,
     };
@@ -136,11 +132,10 @@ pub async fn save(
 /// GET /progress?show=X   → every episode watched in show X, newest first
 pub async fn list(
     State(state): State<AppState>,
-    Extension(ClientId(client)): Extension<ClientId>,
     headers: HeaderMap,
     Query(q): Query<ShowQuery>,
 ) -> impl IntoResponse {
-    let username = match caller(&state, &headers, &client) {
+    let username = match caller(&state, &headers) {
         Ok(u) => u,
         Err(e) => return e,
     };

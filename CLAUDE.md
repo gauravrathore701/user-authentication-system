@@ -82,6 +82,28 @@ Indexes on `watch_progress`: unique (username, show, path), plus
 
 ---
 
+## Client (tenant) gate — 2026-09-24
+
+Every route is behind `middlewares::client::require_client`. The caller must
+send `X-Client-Id`; missing/empty -> 400, not in `ALLOWED_CLIENTS` -> 403.
+The list is hardcoded in `src/middlewares/client.rs`
+(`shows_project`, `files_project`) — two callers, no admin UI, so a table
+would be overhead. Controllers read the id via `Extension<ClientId>`.
+
+Users carry `clients: [String]`. Login requires membership, and the JWT
+carries a matching `client` claim that `/users/verify` and `/progress`
+compare against the request's header — a `shows_project` token is useless
+against `files_project`.
+
+Wrong-client login returns the *same* 401 as a bad password, on purpose:
+a distinct error would tell an attacker which users belong to which app.
+
+`mecca-api-project` sends the header as a default on its `authWebClient`
+bean (`downstream.auth.client-id`, env `AUTH_CLIENT_ID`, default
+`shows_project`).
+
+---
+
 ### `POST /users/register`
 
 ```json
@@ -96,8 +118,12 @@ Indexes on `watch_progress`: unique (username, show, path), plus
 - Required: `username`, `password`, `email`
 - All additional fields in the body are stored in MongoDB alongside the required ones (no schema restriction)
 - Password hashed with bcrypt before storing
+- Requires `X-Client-Id`; the new user gets `clients: [<client>]`
 - Returns `201` + `{ "message": "user created", "id": "<ObjectId>" }`
-- Returns `409` if username already exists
+- An **existing** username under a **new** client, with the correct password,
+  gets that client added: `200` + `{ "message": "client granted" }`
+- Returns `409` if the username already holds this client, or if the password
+  doesn't match (same response either way — no account probing)
 - Returns `400` for missing required fields
 
 ### `POST /users/login`
@@ -109,8 +135,24 @@ Indexes on `watch_progress`: unique (username, show, path), plus
 }
 ```
 
-- Returns `200` + `{ "token": "<jwt>" }` on success
-- Returns `401` on wrong credentials
+- Requires `X-Client-Id`; the user must hold that client
+- Returns `200` + `{ "token": "<jwt>", "client": "<id>" }` on success
+- Also sets `auth_token` as an `HttpOnly; Secure; SameSite=Lax` cookie, so a
+  browser file listing can authenticate without setting a header
+- Returns `401` on wrong credentials **or** wrong client — deliberately
+  indistinguishable
+
+### `GET /users/verify`
+
+For Caddy `forward_auth`. Reads the JWT from `Authorization: Bearer` or the
+`auth_token` cookie. `200` when the token is live and its `client` claim
+equals the request's `X-Client-Id`; `403` on a claim mismatch; `401` when the
+token is missing, invalid or expired. The status is the whole answer.
+
+### `POST /users/logout`
+
+Clears the cookie. The JWT stays valid until it expires — there is no
+revocation list yet.
 
 ---
 

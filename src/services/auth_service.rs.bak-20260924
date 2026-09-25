@@ -4,10 +4,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
-    /// Which project this token is good for. A shows_project token must not
-    /// open files_project, so every verify compares this to the request's
-    /// X-Client-Id.
-    pub client: String,
     pub exp: usize,
 }
 
@@ -23,12 +19,12 @@ impl AuthService {
         }
     }
 
-    pub fn create_token(&self, username: &str, client: &str) -> Result<String, jsonwebtoken::errors::Error> {
+    pub fn create_token(&self, username: &str) -> Result<String, jsonwebtoken::errors::Error> {
         let exp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs() as usize + 86400; // 24h
-        let claims = Claims { sub: username.to_string(), client: client.to_string(), exp };
+        let claims = Claims { sub: username.to_string(), exp };
         encode(
             &Header::default(),
             &claims,

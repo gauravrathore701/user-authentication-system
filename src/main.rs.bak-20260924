@@ -1,11 +1,7 @@
 mod controllers;
-mod middlewares;
 mod services;
 
-use axum::{
-    routing::{get, post},
-    Router,
-};
+use axum::{routing::post, Router};
 use services::{auth_service::AuthService, database_service::DatabaseService};
 use tower_http::cors::{Any, CorsLayer};
 
@@ -32,11 +28,7 @@ async fn main() {
     let app = Router::new()
         .route("/users/register", post(controllers::users::register))
         .route("/users/login", post(controllers::users::login))
-        .route("/users/logout", post(controllers::users::logout))
-        .route("/users/verify", get(controllers::users::verify))
         .route("/progress", post(controllers::progress::save).get(controllers::progress::list))
-        // Runs before every route above: no valid X-Client-Id, no request.
-        .layer(axum::middleware::from_fn(middlewares::client::require_client))
         .layer(cors)
         .with_state(state);
 
