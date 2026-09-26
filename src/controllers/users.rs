@@ -16,6 +16,16 @@ use crate::AppState;
 /// cannot read it.
 pub const TOKEN_COOKIE: &str = "auth_token";
 
+/// A master account: logs in to every allowed client without being listed
+/// under it. The `clients` array is ignored for these users — the password is
+/// the only check. Set `isUniversalUser: true` on the user document.
+///
+/// This does not bypass the `X-Client-Id` middleware: an unknown client id is
+/// still a 403 for everyone. It only skips the per-user membership test.
+fn is_universal(user: &bson::Document) -> bool {
+    user.get_bool("isUniversalUser").unwrap_or(false)
+}
+
 /// The client ids a user is registered under.
 fn clients_of(user: &bson::Document) -> Vec<String> {
     user.get_array("clients")
@@ -127,7 +137,8 @@ pub async fn login(
 
     // Wrong project reads as bad credentials on purpose: telling a caller the
     // account exists but belongs elsewhere leaks which users are on which app.
-    if !clients_of(&user).contains(&client) {
+    // A universal user skips this: every allowed client is theirs.
+    if !is_universal(&user) && !clients_of(&user).contains(&client) {
         return unauthorized();
     }
 
